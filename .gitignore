@@ -1,0 +1,8 @@
+misc/
+node_modules/
+.env
+.venv/
+.vscode/
+.pytest_cache/
+.mypy_cache/
+.DS_Store
