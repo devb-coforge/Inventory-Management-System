@@ -94,3 +94,44 @@ def search_products(
         + " ORDER BY p.name, p.id"
     )
     return connection.execute(query, parameters).fetchall()
+
+def stock_value_by_supplier(connection):
+    """Return each supplier's current stock value in cents, highest first."""
+    return connection.execute(
+        """SELECT s.id AS supplier_id, s.name AS supplier_name,
+                  COALESCE(SUM(p.unit_price * p.quantity), 0) AS stock_value
+           FROM suppliers s LEFT JOIN products p ON p.supplier_id = s.id
+           GROUP BY s.id, s.name
+           ORDER BY stock_value DESC"""
+    ).fetchall()
+
+
+def low_stock(connection):
+    """Return products at or below reorder level with units_short, sorted by name."""
+    return connection.execute(
+        """SELECT p.*, p.reorder_level - p.quantity AS units_short
+           FROM products p
+           WHERE p.quantity <= p.reorder_level
+           ORDER BY p.name"""
+    ).fetchall()
+
+
+def sales_by_product(connection):
+    """Return product IDs, SKUs, names, units_sold, and revenue in cents."""
+    return connection.execute(
+        """SELECT p.id, p.sku, p.name,
+                  COALESCE(SUM(si.quantity), 0) AS units_sold,
+                  COALESCE(SUM(si.quantity * si.unit_price), 0) AS revenue
+           FROM products p LEFT JOIN sale_items si ON si.product_id = p.id
+           GROUP BY p.id, p.sku, p.name
+           ORDER BY revenue DESC"""
+    ).fetchall()
+
+
+def never_sold(connection):
+    """Return products without any sale items, sorted by product name."""
+    return connection.execute(
+        """SELECT p.* FROM products p
+           WHERE NOT EXISTS (SELECT 1 FROM sale_items si WHERE si.product_id = p.id)
+           ORDER BY p.name"""
+    ).fetchall()
