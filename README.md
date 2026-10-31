@@ -48,6 +48,17 @@ The functions in `inventory_db.py` accept a connection from `connect()`:
 - `change_price()` and `delete_product()` return whether a product was found. Database constraints reject invalid values and prevent deleting products with sales or stock movement history, raising `sqlite3.IntegrityError`.
 - `search_products()` returns named rows sorted by product name. Text matches part of the name, SKU, or supplier name, ignoring ASCII case. Empty text lists all products; `%`, `_`, and backslashes are treated literally. Optional filters combine: exact category, inclusive maximum price in cents, positive stock, and stock at or below the reorder level.
 
+## Reports
+
+All 4 functions in `inventory_db.py` accept a connection and return lists of named rows. They leave the database and any pending transaction unchanged. Money values are integer cents.
+
+- `stock_value_by_supplier()` returns `supplier_id`, `supplier_name`, and `stock_value` (current unit price × current quantity). Suppliers without products have zero value. Results sort by value descending; suppliers with the same name remain separate.
+- `low_stock()` returns all product fields plus `units_short` (reorder level minus quantity) for products at or below their reorder level. A product exactly at its reorder level has zero units short.
+- `sales_by_product()` returns product `id`, `sku`, `name`, `units_sold`, and `revenue`. Revenue uses prices saved in sale items, so later price changes do not rewrite history. Unsold products have zero units sold and revenue. Results sort by revenue descending.
+- `never_sold()` returns all product fields for products with no sale items. A sale at zero price still counts as a sale. This report and the low-stock report sort by product name.
+
+## Testing
+
 Run the checks with:
 
 ```sh
