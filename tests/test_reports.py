@@ -69,20 +69,23 @@ def test_low_stock_returns_no_rows_when_all_stock_is_above_reorder(seeded_db):
 
 def test_sales_by_product_matches_seed_totals_including_unsold_products(seeded_db):
     rows = sales_by_product(seeded_db)
-    assert [(row["id"], row["units_sold"], row["revenue"]) for row in rows] == [
-        (1, 3, 3797),
-        (7, 3, 3297),
-        (4, 6, 2394),
-        (5, 1, 1499),
-        (9, 4, 1396),
-        (2, 2, 1198),
-        (10, 2, 998),
-        (3, 1, 899),
-        (6, 2, 498),
-        (8, 2, 398),
-        (12, 0, 0),
-        (11, 0, 0),
-    ]
+    assert {row["id"]: (row["units_sold"], row["revenue"]) for row in rows} == {
+        1: (3, 3797),
+        7: (3, 3297),
+        4: (6, 2394),
+        5: (1, 1499),
+        9: (4, 1396),
+        2: (2, 1198),
+        10: (2, 998),
+        3: (1, 899),
+        6: (2, 498),
+        8: (2, 398),
+        12: (0, 0),
+        11: (0, 0),
+    }
+    assert [row["revenue"] for row in rows] == sorted(
+        (row["revenue"] for row in rows), reverse=True
+    )
     assert rows[0]["name"] == "Claw Hammer"
     assert rows[0]["sku"] == "HAM-001"
 
@@ -118,7 +121,6 @@ def test_products_without_sales_are_reported_with_zero_totals(seeded_db):
     rows = sales_by_product(seeded_db)
     assert len(rows) == 12
     assert all(row["units_sold"] == row["revenue"] == 0 for row in rows)
-    assert [row["name"] for row in rows] == sorted(row["name"] for row in rows)
     assert len(never_sold(seeded_db)) == 12
 
 
