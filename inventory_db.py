@@ -95,6 +95,7 @@ def search_products(
     )
     return connection.execute(query, parameters).fetchall()
 
+
 def stock_value_by_supplier(connection):
     """Return each supplier's current stock value in cents, highest first."""
     return connection.execute(
