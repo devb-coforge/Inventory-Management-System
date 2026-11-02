@@ -1,5 +1,6 @@
 import os
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -136,3 +137,76 @@ def never_sold(connection):
            WHERE NOT EXISTS (SELECT 1 FROM sale_items si WHERE si.product_id = p.id)
            ORDER BY p.name"""
     ).fetchall()
+
+
+def _change_stock(connection, product_id, change, reason, timestamp):
+    """Write stock and its movement together"""
+    product = connection.execute(
+        "SELECT quantity, unit_price FROM products WHERE id = ?", (product_id,)
+    ).fetchone()
+    if product is None:
+        raise ValueError(f"Product {product_id} does not exist.")
+    if product["quantity"] + change < 0:
+        raise ValueError(
+            f"Product {product_id} has {product['quantity']} units; "
+            f"cannot remove {-change}."
+        )
+    connection.execute(
+        "UPDATE products SET quantity = quantity + ? WHERE id = ?",
+        (change, product_id),
+    )
+    connection.execute(
+        """INSERT INTO stock_movements (product_id, change, reason, occurred_at)
+           VALUES (?, ?, ?, ?)""",
+        (product_id, change, reason, timestamp),
+    )
+    return product
+
+
+def restock(connection, product_id, quantity, timestamp=None):
+    """Increase stock by a positive amount and log a restock movement."""
+    if quantity <= 0:
+        raise ValueError("Restock quantity must be positive.")
+    if timestamp is None:
+        timestamp = datetime.now(UTC).isoformat()
+    with connection:
+        _change_stock(connection, product_id, quantity, "restock", timestamp)
+
+
+def adjust_stock(connection, product_id, change, timestamp=None):
+    """Apply a signed change and log it; refuse a negative resulting stock."""
+    if timestamp is None:
+        timestamp = datetime.now(UTC).isoformat()
+    with connection:
+        _change_stock(connection, product_id, change, "adjustment", timestamp)
+
+
+def record_sale(connection, items, timestamp=None):
+    """Record a list of product/quantity pairs atomically and return the sale ID."""
+    if not items:
+        raise ValueError("A sale cannot be empty.")
+    if timestamp is None:
+        timestamp = datetime.now(UTC).isoformat()
+    with connection:
+        cursor = connection.execute(
+            "INSERT INTO sales (sold_at) VALUES (?)", (timestamp,)
+        )
+        sale_id = cursor.lastrowid
+        seen = set()
+        for product_id, quantity in items:
+            if quantity <= 0:
+                raise ValueError("Sale quantity must be positive.")
+            if product_id in seen:
+                raise ValueError(
+                    f"Product {product_id} appears more than once in the sale."
+                )
+            seen.add(product_id)
+            product = _change_stock(
+                connection, product_id, -quantity, "sale", timestamp
+            )
+            connection.execute(
+                """INSERT INTO sale_items (sale_id, product_id, quantity, unit_price)
+                   VALUES (?, ?, ?, ?)""",
+                (sale_id, product_id, quantity, product["unit_price"]),
+            )
+    return sale_id
