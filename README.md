@@ -148,7 +148,9 @@ For Docker, copy the backup within the volume and restart with `-e INVENTORY_DB=
 
 ## Releases
 
-The low-stock startup banner and releases 1.0.0/1.1.0 are pending. After both images exist, rollback means stopping the 1.1.0 container and starting 1.0.0 with the same volume. Actual version-to-version rollback output will be added when verified.
+Git tag `v1.0.0` points at `18de908`, the menu-and-container merge. The low-stock startup banner prints how many products have quantity at or below their reorder level.
+
+Local images are `inventory-management:dev` and `inventory-management:test`. Image tags `1.0.0` and `1.1.0` are not built. After both exist, rollback means stopping the 1.1.0 container and starting 1.0.0 with the same volume. Version-to-version rollback output is still waiting on that run.
 
 ## Self-review
 

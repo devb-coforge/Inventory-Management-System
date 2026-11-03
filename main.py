@@ -7,6 +7,7 @@ from inventory_db import (
     connect,
     get_product,
     low_stock,
+    low_stock_product_count,
     never_sold,
     record_sale,
     restock,
@@ -196,11 +197,20 @@ def run_menu(connection):
     print("Goodbye.")
 
 
+def print_menu_low_stock(connection):
+    print("=" * 100)
+    print(
+        f"Low Stock Report: {low_stock_product_count(connection)} products below reorder level"
+    )
+    print("=" * 100)
+
+
 def main():
     """Open the configured database and close it when the menu exits."""
     try:
         with closing(connect()) as connection:
             connection.execute("SELECT 1 FROM products LIMIT 1")
+            print_menu_low_stock(connection)
             run_menu(connection)
     except sqlite3.Error as error:
         print(f"Database error: {error}. Check INVENTORY_DB and run seed_db.py first.")
