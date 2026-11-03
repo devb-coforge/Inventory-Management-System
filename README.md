@@ -90,10 +90,10 @@ The transaction rolls back the entire sale, including the hammer's stock change.
 ## Docker
 
 ```sh
-docker build -t inventory-management:dev .
+docker build -t hwstore-cli:1.1.0 .
 docker volume create inventory-data
-docker run --rm -v inventory-data:/data inventory-management:dev .venv/bin/python seed_db.py
-docker run --rm -it -v inventory-data:/data inventory-management:dev
+docker run --rm -v inventory-data:/data hwstore-cli:1.1.0 .venv/bin/python seed_db.py
+docker run --rm -it -v inventory-data:/data hwstore-cli:1.1.0
 ```
 
 The image pins Python to `3.13.7-slim-bookworm`. Its default database is `/data/inventory.db`. Seed the volume once and keep using that volume when replacing containers. Override the path with `-e INVENTORY_DB=/data/store.db` if needed.
@@ -101,16 +101,18 @@ The image pins Python to `3.13.7-slim-bookworm`. Its default database is `/data/
 Run container tests with:
 
 ```sh
-docker run --rm inventory-management:dev .venv/bin/pytest -q
+docker run --rm hwstore-cli:1.1.0 .venv/bin/pytest -q
 ```
 
 Actual build output (excerpt):
 
 ```text
-#16 naming to docker.io/library/inventory-management:dev done
-#16 unpacking to docker.io/library/inventory-management:dev 0.1s done
+#16 naming to docker.io/library/hwstore-cli:1.1.0 done
+#16 unpacking to docker.io/library/hwstore-cli:1.1.0 0.1s done
 #16 DONE 0.6s
 ```
+
+The 1.1.0 container tests reported `146 passed in 0.16s`.
 
 Persistence was verified using the separate volume `inventory-menu-check-20261102`: a menu session restocked product 1 by two units, then a replacement container read stock 22.
 
@@ -148,9 +150,26 @@ For Docker, copy the backup within the volume and restart with `-e INVENTORY_DB=
 
 ## Releases
 
-Git tag `v1.0.0` points at `18de908`, the menu-and-container merge. The low-stock startup banner prints how many products have quantity at or below their reorder level.
+Git tags `v1.0.0` (`18de908`) and `v1.1.0` (`92316da`) identify the two releases. Both Docker images exist locally as `hwstore-cli:1.0.0` and `hwstore-cli:1.1.0`. Version 1.1.0 adds the startup banner counting products at or below their reorder level.
 
-Local images are `inventory-management:dev` and `inventory-management:test`. Image tags `1.0.0` and `1.1.0` are not built. After both exist, rollback means stopping the 1.1.0 container and starting 1.0.0 with the same volume. Version-to-version rollback output is still waiting on that run.
+To roll back, exit the 1.1.0 menu with option 0, then start 1.0.0 with the same volume. Keep the existing database; do not seed it again.
+
+```sh
+docker run --rm -it -v inventory-data:/data hwstore-cli:1.0.0
+```
+
+Rollback was verified in the separate volume `inventory-release-rollback-20261103-92c9127a`: 1.1.0 restocked products 1 and 7, then a replacement 1.0.0 container read those changes. Actual output (excerpts from the menu sessions and verification):
+
+```text
+Low Stock Report: 2 products below reorder level
+Choose an option: Product ID: Quantity to add: Restocked product 1 by 2 units.
+Choose an option: Product ID: Quantity to add: Restocked product 7 by 6 units.
+1 | HAM-001 | Claw Hammer | Tools | 1 | 12.99 | 22 | 5 | Forge Tools
+7 | PIP-001 | Copper Pipe | Plumbing | 3 | 10.99 | 6 | 5 | Flow Plumbing
+Rollback 1.1.0 -> 1.0.0: PASS (identical database SHA-256, row counts, stock, and integrity)
+```
+
+The database integrity check returned `ok`, and the foreign-key check found no errors. The matching database hashes confirm that rollback preserved all data.
 
 ## Self-review
 
