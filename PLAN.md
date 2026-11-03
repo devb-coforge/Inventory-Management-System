@@ -36,7 +36,8 @@ Database functions accept a connection so tests can use an in-memory database. P
 - `restock(connection, product_id, quantity, timestamp=None)`: increase stock and log a movement; return nothing.
 - `adjust_stock(connection, product_id, change, timestamp=None)`: adjust stock and log a movement; return nothing.
 - `record_sale(connection, items, timestamp=None)`: accept product ID and quantity pairs; return the new sale ID.
-- `backup_database(connection, destination)`: create a backup using SQLite's backup function; return nothing.
+- `backup_database(connection, destination)`: create a backup using SQLite's backup function; require a new destination file and no pending transaction; return nothing.
+- `run_menu(connection)`: run menu actions using the supplied connection until exit, EOF, or Ctrl+C; return nothing.
 - `main()`: run the terminal menu; return nothing.
 
 Invalid operations raise specific errors that the menu translates into friendly messages. Stock operations default to the current time when no timestamp is supplied.

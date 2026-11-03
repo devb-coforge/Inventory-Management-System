@@ -1,5 +1,6 @@
 import os
 import sqlite3
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -148,7 +149,7 @@ def _change_stock(connection, product_id, change, reason, timestamp):
         raise ValueError(f"Product {product_id} does not exist.")
     if product["quantity"] + change < 0:
         raise ValueError(
-            f"Product {product_id} has {product['quantity']} units; "
+            f"Insufficient stock: Product {product_id} has {product['quantity']} units; "
             f"cannot remove {-change}."
         )
     connection.execute(
@@ -165,8 +166,8 @@ def _change_stock(connection, product_id, change, reason, timestamp):
 
 def restock(connection, product_id, quantity, timestamp=None):
     """Increase stock by a positive amount and log a restock movement."""
-    if quantity <= 0:
-        raise ValueError("Restock quantity must be positive.")
+    if type(quantity) is not int or quantity <= 0:
+        raise ValueError("Restock quantity must be a positive integer.")
     if timestamp is None:
         timestamp = datetime.now(UTC).isoformat()
     with connection:
@@ -175,6 +176,8 @@ def restock(connection, product_id, quantity, timestamp=None):
 
 def adjust_stock(connection, product_id, change, timestamp=None):
     """Apply a signed change and log it; refuse a negative resulting stock."""
+    if type(change) is not int:
+        raise ValueError("Stock adjustment must be an integer.")
     if timestamp is None:
         timestamp = datetime.now(UTC).isoformat()
     with connection:
@@ -184,7 +187,7 @@ def adjust_stock(connection, product_id, change, timestamp=None):
 def record_sale(connection, items, timestamp=None):
     """Record a list of product/quantity pairs atomically and return the sale ID."""
     if not items:
-        raise ValueError("A sale cannot be empty.")
+        raise ValueError("A sale must contain at least one product.")
     if timestamp is None:
         timestamp = datetime.now(UTC).isoformat()
     with connection:
@@ -194,11 +197,11 @@ def record_sale(connection, items, timestamp=None):
         sale_id = cursor.lastrowid
         seen = set()
         for product_id, quantity in items:
-            if quantity <= 0:
-                raise ValueError("Sale quantity must be positive.")
+            if type(quantity) is not int or quantity <= 0:
+                raise ValueError("Sale quantity must be a positive integer.")
             if product_id in seen:
                 raise ValueError(
-                    f"Product {product_id} appears more than once in the sale."
+                    f"Duplicate product: Product {product_id} appears more than once in the sale."
                 )
             seen.add(product_id)
             product = _change_stock(
@@ -210,3 +213,13 @@ def record_sale(connection, items, timestamp=None):
                 (sale_id, product_id, quantity, product["unit_price"]),
             )
     return sale_id
+
+
+def backup_database(connection, destination):
+    """Copy the database to a new file using SQLite's backup API."""
+    if connection.in_transaction:
+        raise ValueError("Finish the current transaction before creating a backup.")
+    if Path(destination).exists():
+        raise FileExistsError("Choose a new backup file; that file already exists.")
+    with closing(connect(destination)) as backup:
+        connection.backup(backup)

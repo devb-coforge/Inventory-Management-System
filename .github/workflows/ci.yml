@@ -27,3 +27,12 @@ jobs:
         run: uv run --locked ruff format --check .
       - name: Test
         run: uv run --locked pytest -q
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build application image
+        run: docker build -t inventory-management:dev .
+      - name: Run tests inside container
+        run: docker run --rm inventory-management:dev .venv/bin/pytest -q
