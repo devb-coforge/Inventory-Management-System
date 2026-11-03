@@ -1,140 +1,32 @@
 # Inventory Management System
 
-A Python terminal app for managing a hardware store's inventory with SQLite.
+A Python terminal app for managing hardware-store products, searching inventory, recording stock changes and sales, running reports, and backing up a SQLite database. See [PLAN.md](PLAN.md) for the implementation plan.
 
-## Planned features
+## Setup and usage
 
-- Manage products and suppliers.
-- Search products with filters.
-- Track restocks, adjustments, and sales.
-- View stock value, low-stock, sales, and never-sold reports.
-- Back up and restore the database.
-- Run with Docker and persistent storage.
-
-## Status
-
-Database setup, sample data, product operations, filtered search, reports, and stock transactions are implemented. The terminal menu, backup support, and Docker support are planned.
-
-See [PLAN.md](PLAN.md) for the implementation plan.
-
-## Code layout
-
-- `inventory_db.py`: opens SQLite connections and provides product operations, search, reports, stock changes, and sales.
-- `seed_db.py`: creates the schema from `schema.sql` and loads sample data.
-- `tests/`: tests each feature against the real database schema.
-
-## Setup
-
-Install uv and use Python 3.13. The project uses SQLite from the Python standard library.
+Install uv and Python 3.13, then run:
 
 ```sh
 uv sync --locked
-```
-
-## Create the sample database
-
-```sh
 uv run --locked python seed_db.py
+uv run --locked python main.py
 ```
 
-The database defaults to `inventory.db` beside the code. Set `INVENTORY_DB` to use another location; its parent directory must already exist.
+Seed once, before starting the menu. The database defaults to `inventory.db` beside the code. To choose another location, set `INVENTORY_DB` for both commands; its parent directory must exist.
 
-```sh
-INVENTORY_DB=/tmp/inventory-demo.db uv run --locked python seed_db.py
-```
+Enter prices in whole cents (`1299` means 12.99). The menu displays money with two decimals. Blank search filters mean no restriction. When recording a sale, leave the next product ID blank to finish; a blank first ID cancels. Option 0 exits.
 
-Tests use a fresh in-memory database per test, with a temporary file for the seed command check. GitHub Actions runs these checks on pull requests and pushes to main.
-
-## Products and search
-
-The functions in `inventory_db.py` accept a connection from `connect()`:
-
-- `add_product()` returns the new product ID. Prices are whole cents.
-- `get_product()` returns a named row including `supplier_name`, or `None` for a missing ID.
-- `change_price()` and `delete_product()` return whether a product was found. Database constraints reject invalid values and prevent deleting products with sales or stock movement history, raising `sqlite3.IntegrityError`.
-- `search_products()` returns named rows sorted by product name. Text matches part of the name, SKU, or supplier name, ignoring ASCII case. Empty text lists all products; `%`, `_`, and backslashes are treated literally. Optional filters combine: exact category, inclusive maximum price in cents, positive stock, and stock at or below the reorder level.
-
-## Reports
-
-All 4 functions in `inventory_db.py` accept a connection and return lists of named rows. They leave the database and any pending transaction unchanged. Money values are integer cents.
-
-- `stock_value_by_supplier()` returns `supplier_id`, `supplier_name`, and `stock_value` (current unit price × current quantity). Suppliers without products have zero value. Results sort by value descending; suppliers with the same name remain separate.
-- `low_stock()` returns all product fields plus `units_short` (reorder level minus quantity) for products at or below their reorder level. A product exactly at its reorder level has zero units short.
-- `sales_by_product()` returns product `id`, `sku`, `name`, `units_sold`, and `revenue`. Revenue uses prices saved in sale items, so later price changes do not rewrite history. Unsold products have zero units sold and revenue. Results sort by revenue descending.
-- `never_sold()` returns all product fields for products with no sale items. A sale at zero price still counts as a sale. This report and the low-stock report sort by product name.
-
-## Stock changes and sales
-
-These functions in `inventory_db.py` accept a connection from `connect()`:
-
-- `restock(connection, product_id, quantity, timestamp=None)` increases stock by a positive integer and records a `restock` movement. Returns `None`.
-- `adjust_stock(connection, product_id, change, timestamp=None)` applies a signed integer change and records an `adjustment` movement. Zero is allowed and logged. Returns `None`.
-- `record_sale(connection, items, timestamp=None)` accepts a list of `(product_id, quantity)` pairs and returns the new sale ID. It saves each item's current price in cents, reduces stock, and records negative `sale` movements. Later price changes leave this history intact.
-
-Invalid amounts, missing products, insufficient stock, and duplicate sale products raise `ValueError` with an explanatory message. A sale cannot be empty. Database constraints enforce integer stock and sale quantities, nonnegative stock, and valid relationships.
-
-Each operation uses one `with connection:` block to commit all its writes together or undo them all on failure. Timestamps default to the current UTC time in ISO 8601 format; supplied timestamps are stored as given. All writes in a sale share one timestamp.
-
-Run this Python example with `uv run --locked python` to try a successful sale followed by a failed sale in a disposable database:
-
-```python
-from contextlib import closing
-
-from inventory_db import (
-    adjust_stock,
-    connect,
-    record_sale,
-    restock,
-)
-from seed_db import seed_database
-
-
-def show_state(connection, label):
-    stock = connection.execute(
-        "SELECT id, quantity FROM products WHERE id IN (1, 7) ORDER BY id"
-    ).fetchall()
-    counts = connection.execute(
-        """SELECT (SELECT COUNT(*) FROM sales),
-                  (SELECT COUNT(*) FROM sale_items),
-                  (SELECT COUNT(*) FROM stock_movements)"""
-    ).fetchone()
-    print(f"{label} stock:", [tuple(row) for row in stock])
-    print(f"{label} sales/items/movements:", tuple(counts))
-
-
-with closing(connect(":memory:")) as connection:
-    seed_database(connection)
-    restock(connection, 7, 6)
-    adjust_stock(connection, 7, -1)
-    sale_id = record_sale(connection, [(1, 2), (7, 2)])
-    print(f"Sale recorded: {sale_id}")
-
-    show_state(connection, "Before")
-    before = list(connection.iterdump())
-    try:
-        record_sale(connection, [(1, 1), (7, 4)])
-    except ValueError as error:
-        print(f"Sale rejected: {error}")
-    assert list(connection.iterdump()) == before
-    show_state(connection, "After")
-```
-
-Verified output:
+Seed output:
 
 ```text
-Sale recorded: 6
-Before stock: [(1, 18), (7, 3)]
-Before sales/items/movements: (6, 14, 4)
-Sale rejected: Product 7 has 3 units; cannot remove 4.
-After stock: [(1, 18), (7, 3)]
-After sales/items/movements: (6, 14, 4)
+suppliers: 4
+products: 12
+sales: 5
+sale_items: 12
+stock_movements: 0
 ```
 
-The failed sale leaves no sale header, items, stock changes, or movements, including for the first product in the sale.
-
 ## Testing
-
-Run the checks with:
 
 ```sh
 uv run --locked pytest -q
@@ -142,6 +34,126 @@ uv run --locked ruff check .
 uv run --locked ruff format --check .
 ```
 
-Stock and sales tests cover positive restocks, signed adjustments, current-price sales, fixed and default timestamps, and complete rollback for invalid sales or database write failures. Run the checks above to verify the results.
+Tests use fresh databases. CI runs these checks and builds the Docker image to run pytest inside it.
 
-Implementation review: each stock operation uses one `with connection:` transaction, and no helper commits independently. Existing schema constraints protect stock and history; this feature needs no schema migration.
+## Expected reports
+
+On a fresh seed, stock value by supplier is:
+
+```text
+Forge Tools       574.35
+Bright Electric   413.73
+Fixings Depot     202.57
+Flow Plumbing     132.47
+```
+
+Low stock contains Copper Pipe (stock 0, reorder level 5, short 5) and Wood Screw Pack (stock 5, reorder level 10, short 5). Never sold contains Bolt Pack and Hex Nut Pack.
+
+Sales by product, using the prices saved in sale items:
+
+```text
+Product            Units  Revenue
+Claw Hammer            3    37.97
+Copper Pipe            3    32.97
+LED Bulb               6    23.94
+Extension Cable        1    14.99
+Pipe Elbow             4    13.96
+Screwdriver            2    11.98
+Wood Screw Pack        2     9.98
+Pliers                 1     8.99
+Light Switch           2     4.98
+Tap Washer Pack        2     3.98
+Bolt Pack              0     0.00
+Hex Nut Pack           0     0.00
+```
+
+The two zero-revenue products may appear in either order.
+
+## Failed-sale example
+
+With a freshly seeded connection `db`, this call sells one hammer before failing on an out-of-stock pipe:
+
+```python
+record_sale(db, [(1, 1), (7, 1)])
+```
+
+Verified output; stock entries are `(product_id, quantity)`:
+
+```text
+Before stock: [(1, 20), (7, 0)]; sales/items/movements: (5, 12, 0)
+Insufficient stock: Product 7 has 0 units; cannot remove 1.
+After stock: [(1, 20), (7, 0)]; sales/items/movements: (5, 12, 0)
+```
+
+The transaction rolls back the entire sale, including the hammer's stock change.
+
+## Docker
+
+```sh
+docker build -t inventory-management:dev .
+docker volume create inventory-data
+docker run --rm -v inventory-data:/data inventory-management:dev .venv/bin/python seed_db.py
+docker run --rm -it -v inventory-data:/data inventory-management:dev
+```
+
+The image pins Python to `3.13.7-slim-bookworm`. Its default database is `/data/inventory.db`. Seed the volume once and keep using that volume when replacing containers. Override the path with `-e INVENTORY_DB=/data/store.db` if needed.
+
+Run container tests with:
+
+```sh
+docker run --rm inventory-management:dev .venv/bin/pytest -q
+```
+
+Actual build output (excerpt):
+
+```text
+#16 naming to docker.io/library/inventory-management:dev done
+#16 unpacking to docker.io/library/inventory-management:dev 0.1s done
+#16 DONE 0.6s
+```
+
+Persistence was verified using the separate volume `inventory-menu-check-20261102`: a menu session restocked product 1 by two units, then a replacement container read stock 22.
+
+## Backup and restore
+
+Menu option 10 uses SQLite's backup API. Choose a new file, such as `inventory-backup.db`, in an existing directory. In Docker, use a path inside the volume, such as `/data/backup.db`.
+
+The backup test checks `PRAGMA integrity_check`, foreign keys, matching row counts, and matching data:
+
+```sh
+uv run --locked pytest tests/test_backup.py -q
+```
+
+Actual persistence, backup, and restore verification output from the Docker test volume:
+
+```text
+Persisted stock: 22
+Backup integrity: ok
+suppliers: 4 / 4
+products: 12 / 12
+sales: 5 / 5
+sale_items: 12 / 12
+stock_movements: 1 / 1
+Restored stock: 22
+```
+
+To restore locally, stop the app, copy the backup to a new filename, and use that file:
+
+```sh
+cp inventory-backup.db restored.db
+INVENTORY_DB=restored.db uv run --locked python main.py
+```
+
+For Docker, copy the backup within the volume and restart with `-e INVENTORY_DB=/data/restored.db` and the same volume.
+
+## Releases
+
+The low-stock startup banner and releases 1.0.0/1.1.0 are pending. After both images exist, rollback means stopping the 1.1.0 container and starting 1.0.0 with the same volume. Actual version-to-version rollback output will be added when verified.
+
+## Self-review
+
+The menu calls the database functions, keeping input handling separate from SQL. SQLite constraints enforce the product rules, and each stock operation uses one transaction. Helpers do not commit separately. Failed-sale tests verify that stock, sale items, and movement history remain unchanged after an error. Connections are closed when the menu exits.
+
+If rebuilding this, I would decide on a consistent report display earlier and keep the input prompts shorter. The current display uses returned column names and values, which is sufficient for this assignment but can be wide. Entering prices as whole cents keeps validation straightforward and avoids rounding during input. The seed data deliberately includes low-stock and never-sold products so every report has an obvious result to check.
+
+I would ask a reviewer to check the database error messages, particularly how duplicate SKUs and unknown suppliers are translated for the menu. Backups have integrity and row-count checks; release rollback still needs verification after both versioned images exist.
