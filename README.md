@@ -14,7 +14,7 @@ uv run --locked python main.py
 
 Seed once, before starting the menu. The database defaults to `inventory.db` beside the code. To choose another location, set `INVENTORY_DB` for both commands; its parent directory must exist.
 
-Enter prices in whole cents (`1299` means 12.99). The menu displays money with two decimals. Blank search filters mean no restriction. When recording a sale, leave the next product ID blank to finish; a blank first ID cancels. Option 0 exits.
+Enter prices in whole cents (`1299` means 12.99). The menu displays money with two decimals. Blank search filters mean no restriction.
 
 Seed output:
 
@@ -124,7 +124,7 @@ The backup test checks `PRAGMA integrity_check`, foreign keys, matching row coun
 uv run --locked pytest tests/test_backup.py -q
 ```
 
-Actual persistence, backup, and restore verification output from the Docker test volume:
+Seed output:
 
 ```text
 Persisted stock: 22
@@ -154,6 +154,5 @@ The low-stock startup banner and releases 1.0.0/1.1.0 are pending. After both im
 
 The menu calls the database functions, keeping input handling separate from SQL. SQLite constraints enforce the product rules, and each stock operation uses one transaction. Helpers do not commit separately. Failed-sale tests verify that stock, sale items, and movement history remain unchanged after an error. Connections are closed when the menu exits.
 
-If rebuilding this, I would decide on a consistent report display earlier and keep the input prompts shorter. The current display uses returned column names and values, which is sufficient for this assignment but can be wide. Entering prices as whole cents keeps validation straightforward and avoids rounding during input. The seed data deliberately includes low-stock and never-sold products so every report has an obvious result to check.
-
-I would ask a reviewer to check the database error messages, particularly how duplicate SKUs and unknown suppliers are translated for the menu. Backups have integrity and row-count checks; release rollback still needs verification after both versioned images exist.
+If rebuilding this, I would use a clearer file structure. Schema, products, search, reports, stock changes, sales, and backup all live in one file, `inventory_db.py`, while the menu lives in `main.py`. Splitting those concerns into separate modules would make each part easier to follow. I would also decide on a consistent report display earlier and keep the input prompts shorter. The current display uses returned column names and values, which is sufficient for this assignment but can be wide. Entering prices as whole cents keeps validation straightforward and avoids rounding during input.
+I would ask a reviewer to check the database error messages, particularly how duplicate SKUs and unknown suppliers are translated for the menu.

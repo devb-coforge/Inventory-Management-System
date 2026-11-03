@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime
 
 import pytest
 
@@ -152,7 +152,7 @@ def test_sale_rolls_back_when_second_movement_insert_fails(seeded_db):
 
 @pytest.mark.parametrize("operation", [restock, adjust_stock, record_sale])
 def test_stock_operations_default_to_current_utc_time(seeded_db, operation):
-    before = datetime.now(timezone.utc)
+    before = datetime.UTC
     if operation is record_sale:
         sale_id = operation(seeded_db, [(1, 1)])
         saved_time = seeded_db.execute(
@@ -164,7 +164,7 @@ def test_stock_operations_default_to_current_utc_time(seeded_db, operation):
             "SELECT occurred_at FROM stock_movements"
         ).fetchone()[0]
     timestamp = datetime.fromisoformat(saved_time)
-    assert before <= timestamp <= datetime.now(timezone.utc)
+    assert before <= timestamp <= datetime.UTC
     assert seeded_db.execute(
         "SELECT occurred_at FROM stock_movements"
     ).fetchone()[0] == saved_time
