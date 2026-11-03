@@ -7,13 +7,13 @@ from inventory_db import (
     connect,
     get_product,
     low_stock,
+    low_stock_product_count,
     never_sold,
     record_sale,
     restock,
     sales_by_product,
     search_products,
     stock_value_by_supplier,
-    low_stock_product_count,
 )
 
 MENU = """
