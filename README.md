@@ -12,9 +12,9 @@ uv run --locked python seed_db.py
 uv run --locked python main.py
 ```
 
-Seed once, before starting the menu. The database defaults to `inventory.db` beside the code. To choose another location, set `INVENTORY_DB` for both commands; its parent directory must exist.
+Seed once, before starting the menu. The database defaults to `inventory.db` beside the code. To choose another location, set `INVENTORY_DB` in `.env` for both commands.
 
-Enter prices in whole cents (`1299` means 12.99). The menu displays money with two decimals. Blank search filters mean no restriction.
+Enter prices in whole cents (`1299` means 12.99 or `10199` for 101.99). The menu displays money with two decimals. Blank search filters mean no restriction.
 
 Seed output:
 
@@ -158,7 +158,7 @@ To roll back, exit the 1.1.0 menu with option 0, then start 1.0.0 with the same 
 docker run --rm -it -v inventory-data:/data hwstore-cli:1.0.0
 ```
 
-Rollback was verified in the separate volume `inventory-release-rollback-20261103-92c9127a`: 1.1.0 restocked products 1 and 7, then a replacement 1.0.0 container read those changes. Actual output (excerpts from the menu sessions and verification):
+Rollback was verified in the separate volume `inventory-release-rollback-20261103-92c9127a`: 1.1.0 restocked products 1 and 7, then a replacement 1.0.0 container read those changes. Actual output:
 
 ```text
 Low Stock Report: 2 products below reorder level
@@ -175,5 +175,5 @@ The database integrity check returned `ok`, and the foreign-key check found no e
 
 The menu calls the database functions, keeping input handling separate from SQL. SQLite constraints enforce the product rules, and each stock operation uses one transaction. Helpers do not commit separately. Failed-sale tests verify that stock, sale items, and movement history remain unchanged after an error. Connections are closed when the menu exits.
 
-If rebuilding this, I would use a clearer file structure. Schema, products, search, reports, stock changes, sales, and backup all live in one file, `inventory_db.py`, while the menu lives in `main.py`. Splitting those concerns into separate modules would make each part easier to follow. I would also decide on a consistent report display earlier and keep the input prompts shorter. The current display uses returned column names and values, which is sufficient for this assignment but can be wide. Entering prices as whole cents keeps validation straightforward and avoids rounding during input.
+If rebuilding this, I would use a clearer file structure. Schema, products, search, reports, stock changes, sales, and backup all live in one file, `inventory_db.py`, while the menu lives in `main.py`. Splitting those concerns into separate modules would make each part easier to follow. Entering prices as whole cents keeps validation simple and avoids rounding during input however it might be unintuitive to users.
 I would ask a reviewer to check the database error messages, particularly how duplicate SKUs and unknown suppliers are translated for the menu.
