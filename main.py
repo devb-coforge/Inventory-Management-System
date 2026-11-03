@@ -196,10 +196,14 @@ def run_menu(connection):
         print()
     print("Goodbye.")
 
+
 def print_menu_low_stock(connection):
     print("=" * 100)
-    print(f"Low Stock Report: {low_stock_product_count(connection)} products below reorder level")
+    print(
+        f"Low Stock Report: {low_stock_product_count(connection)} products below reorder level"
+    )
     print("=" * 100)
+
 
 def main():
     """Open the configured database and close it when the menu exits."""

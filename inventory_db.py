@@ -118,10 +118,11 @@ def low_stock(connection):
            ORDER BY p.name"""
     ).fetchall()
 
+
 def low_stock_product_count(connection):
     """Return the number of products at or below reorder level."""
     return connection.execute(
-        """SELECT COUNT(*) FROM products WHERE quantity <= reorder_level""" 
+        """SELECT COUNT(*) FROM products WHERE quantity <= reorder_level"""
     ).fetchone()[0]
 
 
